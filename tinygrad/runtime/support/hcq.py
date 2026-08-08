@@ -290,9 +290,11 @@ class HCQSignal(Generic[HCQDeviceType]):
     """
     timeout = timeout or getenv("HCQDEV_WAIT_TIMEOUT_MS", 30000)
     start_time = int(time.perf_counter() * 1000)
-    while (not_passed:=(prev_value:=self.value) < value) and (cur_time:=int(time.perf_counter() * 1000)) - start_time < timeout:
+    prev_value = self.value
+    while (not_passed:=prev_value < value) and (cur_time:=int(time.perf_counter() * 1000)) - start_time < timeout:
       self._sleep(cur_time - start_time)
-      if self.value != prev_value: start_time = int(time.perf_counter() * 1000) # progress was made, reset timer
+      if (new_value:=self.value) != prev_value: start_time = int(time.perf_counter() * 1000) # progress was made, reset timer
+      prev_value = new_value
     if not_passed and self.value < value: raise RuntimeError(f"Wait timeout: {timeout} ms! (the signal is not set to {value}, but {self.value})")
 
 @contextlib.contextmanager
