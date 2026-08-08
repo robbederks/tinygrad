@@ -108,10 +108,14 @@ class HCQGraph(MultiGraphRunner):
       else:
         assert (enqueue_dev.hw_copy_queue_t is not None), "device must implement a copy queue"
         queue_idx = self.devices.index(cast(HCQCompiled, Device[bufs[0].device])) % self.num_copy_queues
-        enqueue_queue = self.copy_queues.setdefault((enqueue_dev, queue_idx),
-          enqueue_dev.hw_copy_queue_t(queue_idx=queue_idx).wait(self.kick_signals[enqueue_dev.peer_group], self.kickoff_var))
+        copy_queue_key = (enqueue_dev, queue_idx)
+        if copy_queue_key not in self.copy_queues:
+          self.copy_queues[copy_queue_key] = enqueue_dev.hw_copy_queue_t(queue_idx=queue_idx).wait(
+            self.kick_signals[enqueue_dev.peer_group], self.kickoff_var)
+        enqueue_queue = self.copy_queues[copy_queue_key]
 
-      out_signal = self.signals.setdefault(enqueue_queue, self.pg_dev[enqueue_dev.peer_group].new_signal(value=0))
+      if enqueue_queue not in self.signals: self.signals[enqueue_queue] = self.pg_dev[enqueue_dev.peer_group].new_signal(value=0)
+      out_signal = self.signals[enqueue_queue]
 
       # Get dependencies based on input and output buffers.
       if is_rdma:
@@ -119,7 +123,8 @@ class HCQGraph(MultiGraphRunner):
         sync_signals, opt_deps, rdeps = self._resolve_deps(bufs[1:], [], enqueue_queue, enqueue_dev, out_signal, j,
                                                            is_copy=is_xfer, rdma_qp=src_qp)
         peer_queue = self.comp_queues[peer_dev:=cast(HCQCompiled, Device[bufs[0].device])]
-        peer_out_signal = self.signals.setdefault(peer_queue, self.pg_dev[peer_dev.peer_group].new_signal(value=0))
+        if peer_queue not in self.signals: self.signals[peer_queue] = self.pg_dev[peer_dev.peer_group].new_signal(value=0)
+        peer_out_signal = self.signals[peer_queue]
         peer_sync_signals, peer_opt_deps, peer_rdeps = self._resolve_deps(bufs[:1], [0], peer_queue, peer_dev, peer_out_signal, j,
                                                                           is_copy=is_xfer, rdma_qp=dest_qp)
         self.rdma_deps[j] = (peer_queue, peer_sync_signals + peer_opt_deps, peer_out_signal, j + 1)
