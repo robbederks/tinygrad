@@ -165,7 +165,8 @@ class CustomASM24Controller:
 
   def scsi_write(self, buf:bytes):
     """Write to SRAM via 0xF2 vendor command + bulk OUT."""
-    buf_padded = buf + b'\x00' * (round_up(len(buf), 512) - len(buf))
+    padding = round_up(len(buf), 512) - len(buf)
+    buf_padded = bytes(buf) + b'\x00' * padding if padding else buf
     sectors = len(buf_padded) // 512
     num_slots = ceildiv(len(buf_padded), 0x4000)  # 16KB per slot
     windex = (num_slots & 0xFF) << 8
@@ -196,7 +197,7 @@ class USBMMIOInterface(MMIOInterface):
 
   def __setitem__(self, index, data):
     off, _ = self._off_from_index(index)
-    data = struct.pack(self.fmt, data) if isinstance(data, int) else bytes(data)
+    data = struct.pack(self.fmt, data) if isinstance(data, int) else memoryview(data).cast('B')
     if not self.pcimem: self.usb.scsi_write(data) if self.addr == 0xf000 else self.usb.write(self.addr + off, data)
     else: self.usb.pcie_mem_write(self.addr+off, data)
 
