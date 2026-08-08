@@ -208,9 +208,11 @@ class MemoryManager:
     ctx = PageTableTraverseContext(self.dev, self.root_page_table, vaddr, create_pts=True, boot=boot)
     for paddr, psize in paddrs:
       for off, pt, pte_idx, pte_cnt, pte_covers in ctx.next(psize, paddr=paddr):
-        for pte_off in range(pte_cnt):
-          pt.set_entry(pte_idx + pte_off, paddr + off + pte_off * pte_covers, uncached=uncached, aspace=aspace, snooped=snooped,
-                       frag=self._frag_size(ctx.vaddr+off, pte_cnt * pte_covers), valid=True)
+        paddrs_batch = [paddr + off + pte_off * pte_covers for pte_off in range(pte_cnt)]
+        kwargs = dict(uncached=uncached, aspace=aspace, snooped=snooped, frag=self._frag_size(ctx.vaddr+off, pte_cnt * pte_covers), valid=True)
+        if hasattr(pt, 'set_entries'): pt.set_entries(pte_idx, paddrs_batch, **kwargs)
+        else:
+          for pte_off, entry_paddr in enumerate(paddrs_batch): pt.set_entry(pte_idx + pte_off, entry_paddr, **kwargs)
 
     self.on_range_mapped()
     return VirtMapping(vaddr, size, paddrs, aspace=aspace, uncached=uncached, snooped=snooped)

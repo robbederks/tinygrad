@@ -126,6 +126,13 @@ class AMPageTableEntry:
     assert paddr & self.adev.gmc.address_space_mask == paddr, f"Invalid physical address {paddr:#x}"
     self.entries[entry_id] = self.adev.gmc.get_pte_flags(self.lv, table, frag, uncached, is_sys, snooped, valid) | (paddr & 0x0000FFFFFFFFF000)
 
+  def set_entries(self, entry_id:int, paddrs:list[int], table=False, uncached=False, aspace=AddrSpace.PHYS, snooped=False, frag=0, valid=True):
+    is_sys = aspace is AddrSpace.SYS
+    if aspace is AddrSpace.PHYS: paddrs = [self.adev.paddr2xgmi(paddr) for paddr in paddrs]
+    assert all(paddr & self.adev.gmc.address_space_mask == paddr for paddr in paddrs)
+    flags = self.adev.gmc.get_pte_flags(self.lv, table, frag, uncached, is_sys, snooped, valid)
+    self.entries[entry_id:entry_id+len(paddrs)] = array.array('Q', (flags | (paddr & 0x0000FFFFFFFFF000) for paddr in paddrs))
+
   def entry(self, entry_id:int) -> int: return self.entries[entry_id]
   def valid(self, entry_id:int) -> bool: return (self.entries[entry_id] & am.AMDGPU_PTE_VALID) != 0
   def address(self, entry_id:int) -> int:
