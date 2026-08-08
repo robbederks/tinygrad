@@ -139,6 +139,9 @@ class CustomASM24Controller:
     """Streaming PCIe memory write via 0xF0 mode 1 + bulk OUT. Data is little-endian dwords on the wire."""
     if not data: return
     assert len(data) % 4 == 0, f"pcie_mem_write requires 4-byte aligned size, got {len(data)}"
+    if len(data) <= 8:
+      for off in range(0, len(data), 4): self.pcie_request(0x60, address + off, int.from_bytes(data[off:off+4], "little"))
+      return
     self._f0_out(0x60, 0x0F, address, len(data) // 4, mode=1)
     self.usb.bulk_write(data)
 
